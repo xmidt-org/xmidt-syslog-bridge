@@ -51,9 +51,16 @@ what makes this program *this* program.
 ```
 /                            package bridge  -- importable
   doc.go
-  metrics.go   Metrics, NewMetrics(registerer)
-  servers.go   Servers/Server config, NewListeners(cfg, gatherer, logger)
-  (source, screening, destinations, batch engine land here)
+  config.go       Config and its validation
+  metrics.go      the instruments, newMetrics(registerer)
+  servers.go      Servers/Server config, newListeners(cfg, gatherer, logger)
+  message.go      Record, Message, PermanentError, Permanent()
+  source.go       the Source interface
+  destination.go  the Destination interface
+  mocks_test.go   the doubles: mockSource, mockDest, newSyslogSink
+  fixture_integration_test.go
+                  the Kafka fixture and TestMain, behind the integration tag
+  (screening, destinations, batch engine land here)
 
 cmd/xmidt-syslog-bridge/     package main
   main.go      assembly, signals, shutdown order, the registry
@@ -162,8 +169,16 @@ transport later is an enum extension rather than a redesign.
   ignored; they are producer-side conventions, not the contract
   ([`protocol.md` §5](./protocol.md)).
 - Group heartbeats continue while the fetch is paused, so a long **Destination**
-  outage does not evict the member. *Verify this against franz-go's behavior
-  during implementation.*
+  outage does not evict the member. **Verified** against franz-go v1.22.0 and
+  Kafka 7.8.0 in `heartbeat_test.go`: with a 6s session timeout, a member whose
+  topic was paused with `PauseFetchTopics` for 18s kept its partition, its group
+  generation did not advance, no revoke fired, and on resume it delivered from
+  the offset where it stopped. Pausing is therefore backpressure and not a slow
+  way to leave the group, which is what
+  [ADR 0006](./adr/0006-pause-consumption-on-destination-failure.md) rests on.
+  The test stays: franz-go is on dependabot here, and a heartbeat that stopped
+  firing while paused would otherwise surface only as production rebalancing
+  during an outage.
 
 ## 4. Screening
 
@@ -354,11 +369,28 @@ library or a single direct dependency already did.
 
 ## 10. Testing
 
-- Unit tests use fakes for the **Event Source** and **Destination** interfaces,
-  so batch lifecycle is testable without containers.
-- Integration tests use testcontainers for Kafka, MinIO for the **S3
-  Destination**, and a fake `unixgram` listener that records raw bytes for the
-  **Syslog Destination**.
+- Unit tests use mocks for the **Event Source** and **Destination** interfaces,
+  so batch lifecycle is testable without containers. `mockSource` follows the
+  `Source` contract rather than what is convenient: when its canned records run
+  out it blocks until its context is done, as a real consumer on an idle topic
+  does, so a pipeline cannot pass a shutdown test here that it would fail
+  against Kafka.
+- Integration tests use testcontainers for Kafka. They sit behind the
+  `integration` build tag in `*_integration_test.go` files, so the unit suite
+  stays fast enough to run on every save — under two seconds against roughly
+  thirty for the tagged build. `make test` runs one, `make test-integration` the
+  other, `make test-all` both; the Makefile is the interface, because a bare
+  `go test ./...` silently runs half the suite. Within the tagged build,
+  `requireDocker(t)` still skips visibly when no container runtime is reachable.
+- A pure helper stays untagged even when its only caller is tagged, so that it
+  keeps a test in the fast suite. `dockerSkipReason` is the example: it turns a
+  probe error into a skip message and needs no container, so it lives beside its
+  test while `requireDocker` and the probe go with the fixture.
+- The **Syslog Destination** needs no container either. A real `unixgram`
+  listener on a temporary path records the raw bytes of each datagram, which is
+  what byte-identical delivery is asserted against. There is no MinIO fixture:
+  everything the **S3 Destination** must guarantee is about what this code
+  constructs, so a mock `objectPutter` asserts it directly.
 - The tests that define done: byte-identical delivery under and over 1 KB;
   kill-with-open-batch replays; a **Foreign Record** does not block its
   partition; zero or two **Destinations** fails at startup; two batches closing

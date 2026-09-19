@@ -39,6 +39,56 @@ Testing
 Tests are written using golang's standard testing tools, and are run prior to 
 the PR being accepted.
 
+The tests are split by whether they need a container. Anything that does sits
+behind the `integration` build tag in a `*_integration_test.go` file, so the
+unit suite stays fast enough to run on every save.
+
+**The Makefile is the interface. A bare `go test ./...` runs only half the
+suite and says nothing about the half it skipped.**
+
+```
+make test              unit suite, no containers, under two seconds
+make test-integration  integration suite, needs a container runtime
+make test-all          both
+make vet               go vet over both build configurations
+make lint              golangci-lint over both build configurations
+make help              the rest
+```
+
+`make test-integration` also supplies the container environment, which is the
+other reason the Makefile exists. It picks the rootless podman socket when one
+is there and falls back to Docker, so the same target works on a developer's
+machine and on a CI runner. It turns testcontainers' reaper off, because on an
+SELinux host (Fedora, RHEL) the reaper mounts the container socket and SELinux
+does not let the `container_t` domain `connectto` the daemon — so it is denied
+whatever uid it runs as. Nothing leaks from that: the fixture terminates its own
+container in `TestMain`. To keep the reaper instead, run it unconfined:
+
+```
+TESTCONTAINERS_RYUK_CONTAINER_PRIVILEGED=true make test-integration
+```
+
+A new helper that needs no container belongs on the untagged side, beside its
+test, even when its only caller is tagged — otherwise it leaves the fast suite
+for no reason.
+
+**Confirm the container tests actually ran.** Within the tagged build,
+`requireDocker(t)` skips when no runtime is reachable, and a skipped test still
+exits 0 — so a green run can mean nothing was tested. Read the output for
+`docker unavailable:` before trusting it. To see the containers for yourself:
+
+```
+go test -tags=integration -v -count=1 -run TestKafkaFixture .
+```
+
+which prints the image, the container id, and per-test timings. The crude check
+is the clock: the integration suite takes around thirty seconds, so anything
+faster did not start a broker.
+
+CI runs the two suites in separate workflows: the shared-go `ci.yml` runs the
+unit suite, and `integration.yml` runs `make test-integration` on a runner that
+has Docker.
+
 Issues
 ------
 
