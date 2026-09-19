@@ -1,0 +1,47 @@
+# SPDX-FileCopyrightText: 2026 Comcast Cable Communications Management, LLC
+# SPDX-License-Identifier: Apache-2.0
+---
+# Names this instance.  Defaults to the hostname.  Must be unique across
+# instances writing to one bucket -- it is what separates their object keys.
+instance: ""
+
+kafka:
+    brokers:
+        - localhost:9092
+    topic: apparmor-alerts
+    group: xmidt-syslog-bridge
+
+# Which records are ours.  Matched against the parsed WRP locator's authority,
+# never as a string prefix.
+filter:
+    event: apparmor
+
+# Exactly one destination.  Zero or two is a startup error.
+syslog:
+    network: unixgram
+    address: /dev/log
+
+# s3:
+#     bucket: apparmor-archive
+#     region: us-east-1
+#     gzip: true
+#     # .Millis is required for uniqueness: the instance guarantees never to
+#     # reuse a flush timestamp, but only to millisecond resolution.
+# yamllint disable-line rule:line-length
+#     key_template: '{{.FlushTime.UTC.Format "2006/01/02"}}/{{.FlushTime.UTC.Format "15-04-05"}}-{{printf "%03d" .Millis}}-{{.Instance}}{{.Ext}}'
+#     batch:
+#         max_count: 10000
+#         max_batch_timeout: 60s
+#         max_bytes: 67108864
+
+# Each listener is disabled by leaving its address empty.
+servers:
+    health:
+        address: :10080
+        path: /health
+    metrics:
+        address: :9361
+        path: /metrics
+    pprof:
+        address: 127.0.0.1:9999
+        path: /debug/pprof

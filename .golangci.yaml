@@ -1,0 +1,46 @@
+# SPDX-FileCopyrightText: 2026 Comcast Cable Communications Management, LLC
+# SPDX-License-Identifier: Apache-2.0
+---
+version: "2"
+linters:
+  enable:
+    - bodyclose
+    - dupl
+    - errorlint
+    - funlen
+    - goconst
+    - gosec
+    - misspell
+    - prealloc
+    - unconvert
+  disable:
+    - errcheck
+    - ineffassign
+  settings:
+    errorlint:
+      errorf: false
+    goconst:
+      min-occurrences: 4
+      min-len: 5
+    misspell:
+      locale: US
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - dupl
+          - funlen
+        path: _test.go
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gofmt
+    - goimports

@@ -1,0 +1,46 @@
+version = 1
+SPDX-PackageName = "xmidt-syslog-bridge"
+SPDX-PackageSupplier = "Weston Schmidt <weston_schmidt@d73.dev"
+SPDX-PackageDownloadLocation = "https://github.com/xmidt-org/xmidt-syslog-bridge"
+
+[[annotations]]
+path = "NOTICE"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "SPDX-FileCopyrightText: 2026 Comcast Cable Communications Management, LLC"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = ".gitignore"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "SPDX-FileCopyrightText: 2026 Comcast Cable Communications Management, LLC"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = "README.md"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "SPDX-FileCopyrightText: 2026 Comcast Cable Communications Management, LLC"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = "CONTRIBUTING.md"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "SPDX-FileCopyrightText: 2026 Comcast Cable Communications Management, LLC"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = "MAINTAINERS.md"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "SPDX-FileCopyrightText: 2026 Comcast Cable Communications Management, LLC"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = "go.mod"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "SPDX-FileCopyrightText: 2026 Comcast Cable Communications Management, LLC"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = "go.sum"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "SPDX-FileCopyrightText: 2026 Comcast Cable Communications Management, LLC"
+SPDX-License-Identifier = "Apache-2.0"

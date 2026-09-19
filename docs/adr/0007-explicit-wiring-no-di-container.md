@@ -1,0 +1,11 @@
+<!-- SPDX-FileCopyrightText: 2026 Comcast Cable Communications Management, LLC -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+# Wire the service explicitly rather than with a DI container
+
+`xmidt-org/skeleton`, which this service otherwise follows closely, assembles itself with uber fx. This service does not. Its dependency graph is roughly eight nodes and almost perfectly linear — configuration feeds the logger, the metrics registry, three HTTP listeners, the Kafka consumer, and one destination — with no diamonds and no optional or group injection. Against a graph that shape, a container trades compile-time errors for runtime ones and makes the wiring stringly-typed, since annotations like `group:"servers.health.options"` cannot be checked by the compiler. The `--graph` flag skeleton ships to dump the dependency tree is itself an admission of the debugging cost.
+
+The decisive argument is shutdown. A container's main benefit here would be lifecycle ordering, but this service's shutdown sequence — stop fetching, flush every open batch, commit the offsets those batches covered, close the destination, then the client — is the highest-stakes code path it has, because getting the order wrong loses data or commits offsets for messages that were never written. That sequence should be read in one place, not derived from whether the provider graph happens to have the right shape. Container-managed lifecycle earns its keep when ordering is incidental; here ordering is the point.
+
+We checked before deciding, and the xmidt libraries did not force the issue: `touchstone.New`, `touchstone.NewFactory` and `arrangehttp.NewServer` are complete plain APIs, with fx integration as a convenience layer over them rather than the API itself. As it happened we dropped those libraries too, but the choice was available either way.
+
+The cost is real and accepted: this repository is now the odd one out among xmidt services, and maintainers moving between them will notice. The rule that makes the trade worthwhile is that **the framework, if one is ever reintroduced, stays out of the domain**. The consumer, the batch engine, and the destinations are plain constructors taking explicit arguments, testable with no framework at all. That is what keeps the batch lifecycle tests tractable, and it is the part not to give up.
