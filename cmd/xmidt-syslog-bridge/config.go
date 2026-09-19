@@ -4,6 +4,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -48,9 +49,28 @@ func (c Config) bridgeConfig() bridge.Config {
 	}
 }
 
+// errConfigShown reports that -s/--show printed the configuration and the
+// program should stop, successfully.  It is a sentinel rather than an
+// os.Exit deep in the call stack so that the path stays testable and so that
+// exiting remains main's decision.
+var errConfigShown = errors.New("configuration shown")
+
 // loadConfig collects the configuration files and env vars and produces a
 // validated configuration.
 func loadConfig(cli *CLI) (Config, error) {
+	// goschtalt skips a file it cannot read, which turns a permissions or typo
+	// problem into a confusing complaint about a missing setting much later.
+	// A file named explicitly is meant to be used, so failing to read one is
+	// fatal here.
+	for _, f := range cli.Files {
+		h, err := os.Open(f) // nolint: gosec // the operator named this path
+		if err != nil {
+			return Config{}, fmt.Errorf("%w: cannot read %s: %s",
+				bridge.ErrInvalidConfig, f, err)
+		}
+		_ = h.Close()
+	}
+
 	gs, err := goschtalt.New(
 		goschtalt.StdCfgLayout(applicationName, cli.Files...),
 		goschtalt.ConfigIs("two_words"),
@@ -61,14 +81,16 @@ func loadConfig(cli *CLI) (Config, error) {
 			goschtalt.AsDefault()),
 	)
 	if err != nil {
-		return Config{}, err
+		// Wrapped so that a decoder error -- a YAML syntax mistake, most
+		// often -- reaches the operator with the same guidance as any other
+		// configuration problem.
+		return Config{}, fmt.Errorf("%w: %s", bridge.ErrInvalidConfig, err)
 	}
 
 	if cli.Show {
-		// Show the configuration and exit successfully.  Exiting with success
-		// matters: if the configuration is broken it is very hard to debug
-		// where the problem originates, so being able to see the configuration
-		// and then run the service with the same configuration is the point.
+		// Showing the configuration succeeds even when the configuration is
+		// broken: if it were an error, the one tool for debugging a broken
+		// configuration would refuse to run exactly when it is needed.
 		fmt.Fprintln(os.Stdout, gs.Explain().String())
 
 		out, err := gs.Marshal()
@@ -78,7 +100,7 @@ func loadConfig(cli *CLI) (Config, error) {
 			fmt.Fprintln(os.Stdout, "## Final Configuration\n---\n"+string(out))
 		}
 
-		os.Exit(0)
+		return Config{}, errConfigShown
 	}
 
 	var cfg Config

@@ -42,13 +42,28 @@ func main() {
 		}
 	}()
 
-	if err := run(os.Args[1:], true); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		if errors.Is(err, bridge.ErrInvalidConfig) {
-			fmt.Fprintln(os.Stderr, "Run with -s/--show to see the configuration.")
-		}
-		os.Exit(-1)
+	if code := report(run(os.Args[1:], true)); code != 0 {
+		os.Exit(code)
 	}
+}
+
+// report prints whatever the operator needs to see and returns the process
+// exit code.  It is separate from main so that the decision is testable;
+// main does nothing but call it.
+func report(err error) int {
+	if err == nil || errors.Is(err, errConfigShown) {
+		// -s/--show did its job, and succeeding matters: it is the tool for
+		// debugging a configuration that does not work.
+		return 0
+	}
+
+	fmt.Fprintln(os.Stderr, err)
+
+	if errors.Is(err, bridge.ErrInvalidConfig) {
+		fmt.Fprintln(os.Stderr, "Run with -s/--show to see the configuration.")
+	}
+
+	return -1
 }
 
 // run assembles the service and, when start is true, runs it until signaled.
@@ -120,8 +135,10 @@ func parseCLI(args []string) (*CLI, error) {
 		return nil, err
 	}
 
+	// Returned rather than fatal, so the caller decides how to report it and
+	// so the path is testable.  kong has already printed usage.
 	if _, err = parser.Parse(args); err != nil {
-		parser.FatalIfErrorf(err)
+		return nil, err
 	}
 
 	return &cli, nil

@@ -5,6 +5,7 @@ package bridge
 
 import (
 	"context"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -14,6 +15,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+const healthPath = "/health"
 
 func TestNewListenersSelection(t *testing.T) {
 	reg := prometheus.NewRegistry()
@@ -26,7 +29,7 @@ func TestNewListenersSelection(t *testing.T) {
 		{
 			name: "all three configured",
 			cfg: Servers{
-				Health:  Server{Address: ":1", Path: "/health"},
+				Health:  Server{Address: ":1", Path: healthPath},
 				Metrics: Server{Address: ":2", Path: "/metrics"},
 				Pprof:   Server{Address: ":3", Path: "/debug/pprof"},
 			},
@@ -35,7 +38,7 @@ func TestNewListenersSelection(t *testing.T) {
 			// An empty address is how a listener is turned off.
 			name: "pprof disabled by an empty address",
 			cfg: Servers{
-				Health:  Server{Address: ":1", Path: "/health"},
+				Health:  Server{Address: ":1", Path: healthPath},
 				Metrics: Server{Address: ":2", Path: "/metrics"},
 			},
 			want: 2,
@@ -58,7 +61,7 @@ func TestNewListenersSelection(t *testing.T) {
 
 // A nil logger must not panic: the logger is a convenience, not a requirement.
 func TestNewListenersNilLogger(t *testing.T) {
-	l := newListeners(Servers{Health: Server{Address: ":1", Path: "/health"}}, nil, nil)
+	l := newListeners(Servers{Health: Server{Address: ":1", Path: healthPath}}, nil, nil)
 
 	require.NotNil(t, l)
 	assert.NotNil(t, l.logger)
@@ -82,7 +85,7 @@ func TestNewListenersGraceDefaults(t *testing.T) {
 // See ADR 0006.
 func TestHealthHandler(t *testing.T) {
 	w := httptest.NewRecorder()
-	healthHandler("/health").ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/health", nil))
+	healthHandler(healthPath).ServeHTTP(w, httptest.NewRequest(http.MethodGet, healthPath, nil))
 
 	assert.Equal(t, http.StatusOK, w.Code)
 }
@@ -127,4 +130,27 @@ func TestNewMetricsRejectsDuplicateRegistration(t *testing.T) {
 
 	_, err = newMetrics(reg)
 	assert.Error(t, err)
+}
+
+// A listener that cannot bind is fatal.  A service whose health or metrics
+// endpoint is silently missing is worse than one that refuses to start, and
+// the other listeners must still be shut down rather than left running.
+func TestListenersRunFailsWhenAListenerCannotBind(t *testing.T) {
+	blocker, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer blocker.Close() // nolint: errcheck
+
+	l := newListeners(Servers{
+		Health:        Server{Address: blocker.Addr().String(), Path: healthPath},
+		ShutdownGrace: time.Second,
+	}, nil, nil)
+
+	assert.Error(t, l.Run(context.Background()))
+}
+
+// Destination reports which one is active, and is what the startup log line
+// uses to tell an operator what this instance will do.
+func TestConfigDestination(t *testing.T) {
+	assert.Equal(t, "syslog", with(func(c *Config) { c.Syslog = validSyslog() }).Destination())
+	assert.Equal(t, "s3", with(func(c *Config) { c.S3 = validS3() }).Destination())
 }
