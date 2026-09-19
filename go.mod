@@ -4,7 +4,7 @@ go 1.27.1
 
 require (
 	github.com/alecthomas/kong v1.16.1
-	github.com/goschtalt/goschtalt v0.26.1
+	github.com/goschtalt/goschtalt v0.28.1
 	github.com/goschtalt/yaml-decoder v0.0.1
 	github.com/goschtalt/yaml-encoder v0.0.4
 	github.com/prometheus/client_golang v1.23.2
